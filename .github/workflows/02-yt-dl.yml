@@ -1,19 +1,27 @@
-name: 02- 💾 Large Youtube Videos Downloader
+name: 01- 💾 You tube Downloader
 
 on:
   workflow_dispatch:
     inputs:
       youtube_url:
-        description: 'YouTube video URL'
+        description: '🔗 YouTube video URL'
         required: true
         type: string
       quality:
-        description: 'Video quality (best, 1080, 720, 480, audio)'
+        description: '🎬 Video quality'
         required: false
         default: 'best'
-        type: string
+        type: choice
+        options:
+          - best
+          - 2160
+          - 1440
+          - 1080
+          - 720
+          - 480
+          - audio
       password:
-        description: 'Password for zip files (optional)'
+        description: '🔒 Password for zip files (optional)'
         required: false
         default: ''
         type: string
@@ -34,7 +42,6 @@ jobs:
 
       - name: Configure Git for Large Files
         run: |
-          # Configure git for better large file handling
           git config --global http.postBuffer 524288000
           git config --global http.maxRequestBuffer 100M
           git config --global core.compression 0
@@ -62,19 +69,19 @@ jobs:
             -v warp-data:/var/lib/cloudflare-warp \
             caomingjun/warp
 
-          echo "Waiting for WARP to initialize (30 seconds)..."
-          sleep 30
+          echo "Waiting for WARP to initialize (15 seconds)..."
+          sleep 15
 
           echo "Checking WARP status..."
-          for i in {1..10}; do
-            RESULT=$(curl -s --max-time 10 --socks5-hostname 127.0.0.1:1080 https://cloudflare.com/cdn-cgi/trace 2>/dev/null || echo "failed")
+          for i in {1..5}; do
+            RESULT=$(curl -s --max-time 5 --socks5-hostname 127.0.0.1:1080 https://cloudflare.com/cdn-cgi/trace 2>/dev/null || echo "failed")
             if echo "$RESULT" | grep -qE "warp=(on|plus)"; then
               echo "WARP is active!"
               echo "$RESULT"
               break
             else
-              echo "Attempt $i/10 - WARP not ready yet, waiting..."
-              sleep 10
+              echo "Attempt $i/5 - WARP not ready yet, waiting..."
+              sleep 5
             fi
           done
 
@@ -89,7 +96,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip ffmpeg zip curl jq bc unzip
+          sudo apt-get install -y python3-pip ffmpeg zip p7zip-full curl jq bc unzip
 
           # Install Deno (JS runtime required by yt-dlp for YouTube n-challenge solving)
           curl -fsSL https://deno.land/install.sh | sh
@@ -129,80 +136,75 @@ jobs:
           else
             echo "Password protection: DISABLED"
           fi
+          echo ""
+          echo "Checking available formats..."
+          yt-dlp -F "$URL" || echo "Could not list formats (will proceed with download)"
+          echo ""
 
-          # FIX: sanitize name - replace spaces and special chars with dashes
           sanitize_name() {
             echo "$1" | sed 's/ /-/g' | sed 's/　/-/g' | tr -s '-'
           }
 
-          # Function for proper URL encoding
           urlencode() {
             python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$1"
           }
 
+          # ============================================================
+          # OPTIMIZED FORMAT STRINGS – support for 4K and high quality
+          # FIXED: Uses wildcards to accept ANY container (webm/vp9/mp4)
+          # FIXED: No bare "/best" fallback that ignores height
+          # ============================================================
           case "$QUALITY" in
             "audio")
-              FORMAT="bestaudio"
+              FORMAT="bestaudio/bestaudio*"
               ;;
             "best")
-              FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+              # Best video + best audio, any container (ffmpeg will remux to mp4)
+              FORMAT="bestvideo+bestaudio/bestvideo*+bestaudio*/best"
+              ;;
+            "2160"|"4k")
+              # 4K / 2160p - exact height first, then wildcards for any container
+              FORMAT="bestvideo[height=2160]+bestaudio/bestvideo[height<=2160]+bestaudio/bestvideo[height=2160]*+bestaudio*/bestvideo[height<=2160]*+bestaudio*"
+              ;;
+            "1440"|"2k")
+              # 2K / 1440p - exact height first, then wildcards for any container
+              FORMAT="bestvideo[height=1440]+bestaudio/bestvideo[height<=1440]+bestaudio/bestvideo[height=1440]*+bestaudio*/bestvideo[height<=1440]*+bestaudio*"
               ;;
             "1080")
-              FORMAT="bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best"
+              # 1080p - exact height first, then wildcards for any container
+              FORMAT="bestvideo[height=1080]+bestaudio/bestvideo[height<=1080]+bestaudio/bestvideo[height=1080]*+bestaudio*/bestvideo[height<=1080]*+bestaudio*"
               ;;
             "720")
-              FORMAT="bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best"
+              # 720p - exact height first, then wildcards for any container
+              FORMAT="bestvideo[height=720]+bestaudio/bestvideo[height<=720]+bestaudio/bestvideo[height=720]*+bestaudio*/bestvideo[height<=720]*+bestaudio*"
               ;;
             "480")
-              FORMAT="bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best"
+              # 480p - exact height first, then wildcards for any container
+              FORMAT="bestvideo[height=480]+bestaudio/bestvideo[height<=480]+bestaudio/bestvideo[height=480]*+bestaudio*/bestvideo[height<=480]*+bestaudio*"
               ;;
             *)
-              FORMAT="bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+              FORMAT="bestvideo+bestaudio/bestvideo*+bestaudio*/best"
               ;;
           esac
 
-          # Common yt-dlp flags shared across methods
-          COMMON_FLAGS="--merge-output-format mp4 --output tmp_downloads/%(title)s.%(ext)s --no-part --no-playlist --retries 10 --fragment-retries 10 --no-check-certificates"
+          # CRITICAL FIX: Added --format-sort to prioritize resolution over container format
+          if [ "$QUALITY" = "audio" ]; then
+            COMMON_FLAGS="--output tmp_downloads/%(title)s.%(ext)s --no-part --no-playlist --retries 5 --fragment-retries 5 --no-check-certificates --concurrent-fragments 8 --buffer-size 16K --http-chunk-size 10M --progress --newline"
+          else
+            COMMON_FLAGS="--merge-output-format mp4 --format-sort res,+codec:vp9.1,+size --output tmp_downloads/%(title)s.%(ext)s --no-part --no-playlist --retries 5 --fragment-retries 5 --no-check-certificates --concurrent-fragments 8 --buffer-size 16K --http-chunk-size 10M --progress --newline"
+          fi
 
-          # Array of different methods to try
+          # ============================================================
+          # FIXED METHOD ORDER – web client with proxy first (best quality)
+          # INSPIRED BY youtube-small.yml working solution
+          # ============================================================
           download_video() {
             local METHOD=$1
             echo "Trying download method $METHOD..."
 
             case $METHOD in
               1)
-                # mweb client - does NOT require PO token, very reliable
-                yt-dlp \
-                  --proxy "socks5://127.0.0.1:1080" \
-                  --format "$FORMAT" \
-                  $COMMON_FLAGS \
-                  --extractor-args "youtube:player_client=mweb" \
-                  --concurrent-fragments 4 \
-                  "$URL"
-                ;;
-              2)
-                # android client via WARP - widely supported, no JS runtime needed
-                yt-dlp \
-                  --proxy "socks5://127.0.0.1:1080" \
-                  --format "$FORMAT" \
-                  $COMMON_FLAGS \
-                  --extractor-args "youtube:player_client=android" \
-                  --user-agent "Mozilla/5.0 (Linux; Android 12; SM-S906N Build/QP1A.190711.020) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36" \
-                  --concurrent-fragments 4 \
-                  "$URL"
-                ;;
-              3)
-                # mweb + android combo fallback (tries both clients, picks best format)
-                yt-dlp \
-                  --proxy "socks5://127.0.0.1:1080" \
-                  --format "$FORMAT" \
-                  $COMMON_FLAGS \
-                  --extractor-args "youtube:player_client=mweb,android" \
-                  --concurrent-fragments 4 \
-                  "$URL"
-                ;;
-              4)
-                # web client with deno JS runtime for n-challenge solving
+                # Best method: web client + Deno + WARP proxy (highest quality)
                 yt-dlp \
                   --proxy "socks5://127.0.0.1:1080" \
                   --format "$FORMAT" \
@@ -213,42 +215,68 @@ jobs:
                   --add-header "Accept-Language:en-US,en;q=0.9" \
                   "$URL"
                 ;;
-              5)
-                # android_vr client - bypasses most bot checks, no PO token needed
+              2)
+                # tv_embedded client - often has full quality, no n-challenge
+                yt-dlp \
+                  --proxy "socks5://127.0.0.1:1080" \
+                  --format "$FORMAT" \
+                  $COMMON_FLAGS \
+                  --extractor-args "youtube:player_client=tv_embedded" \
+                  "$URL"
+                ;;
+              3)
+                # android_vr - high quality streams, no n-challenge required
                 yt-dlp \
                   --proxy "socks5://127.0.0.1:1080" \
                   --format "$FORMAT" \
                   $COMMON_FLAGS \
                   --extractor-args "youtube:player_client=android_vr" \
-                  --concurrent-fragments 4 \
+                  "$URL"
+                ;;
+              4)
+                # mweb fallback - may cap quality but sometimes works
+                yt-dlp \
+                  --proxy "socks5://127.0.0.1:1080" \
+                  --format "$FORMAT" \
+                  $COMMON_FLAGS \
+                  --extractor-args "youtube:player_client=mweb" \
+                  "$URL"
+                ;;
+              5)
+                # android fallback
+                yt-dlp \
+                  --proxy "socks5://127.0.0.1:1080" \
+                  --format "$FORMAT" \
+                  $COMMON_FLAGS \
+                  --extractor-args "youtube:player_client=android" \
+                  --user-agent "Mozilla/5.0 (Linux; Android 12; SM-S906N Build/QP1A.190711.020) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36" \
                   "$URL"
                 ;;
               6)
-                # mweb without proxy as direct fallback
+                # web client, no proxy - in case WARP is causing issues
+                yt-dlp \
+                  --format "$FORMAT" \
+                  $COMMON_FLAGS \
+                  --extractor-args "youtube:player_client=web" \
+                  --js-runtimes deno \
+                  "$URL"
+                ;;
+              7)
+                # mweb without proxy (last resort)
                 yt-dlp \
                   --format "$FORMAT" \
                   $COMMON_FLAGS \
                   --extractor-args "youtube:player_client=mweb" \
-                  --concurrent-fragments 4 \
-                  "$URL"
-                ;;
-              7)
-                # android without proxy as direct fallback
-                yt-dlp \
-                  --format "$FORMAT" \
-                  $COMMON_FLAGS \
-                  --extractor-args "youtube:player_client=android" \
-                  --concurrent-fragments 4 \
                   "$URL"
                 ;;
               8)
-                # Last resort: broadest format fallback, no strict ext requirements
+                # FIXED: Last resort now uses $FORMAT instead of hardcoded string
                 yt-dlp \
                   --proxy "socks5://127.0.0.1:1080" \
-                  --format "bestvideo+bestaudio/best" \
+                  --format "$FORMAT" \
                   $COMMON_FLAGS \
-                  --extractor-args "youtube:player_client=mweb,android,android_vr" \
-                  --concurrent-fragments 4 \
+                  --extractor-args "youtube:player_client=web,mweb,android_vr" \
+                  --js-runtimes deno \
                   "$URL"
                 ;;
             esac
@@ -259,10 +287,30 @@ jobs:
             if download_video $METHOD; then
               DOWNLOAD_SUCCESS=true
               echo "Download successful with method $METHOD!"
+
+              # ───────────────────────────────────────────────────────────────
+              # ADDED: Verify the downloaded file actually meets requested quality
+              # If user asked for 1080/720/480 and we got something much lower,
+              # log a clear warning so it's visible in the workflow log
+              # ───────────────────────────────────────────────────────────────
+              if [ "$QUALITY" != "best" ] && [ "$QUALITY" != "audio" ]; then
+                for DOWNLOADED_FILE in tmp_downloads/*.mp4 tmp_downloads/*.webm tmp_downloads/*.mkv; do
+                  [ -f "$DOWNLOADED_FILE" ] || continue
+                  ACTUAL_HEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 "$DOWNLOADED_FILE" 2>/dev/null || echo "unknown")
+                  echo "Requested quality: ${QUALITY}p | Actual video height: ${ACTUAL_HEIGHT}px"
+                  if [ "$ACTUAL_HEIGHT" != "unknown" ] && [ "$ACTUAL_HEIGHT" -lt $(( QUALITY - 50 )) ] 2>/dev/null; then
+                    echo "⚠️  WARNING: Downloaded resolution (${ACTUAL_HEIGHT}p) is significantly lower than requested (${QUALITY}p)."
+                    echo "   This may mean the video is not available at ${QUALITY}p on YouTube."
+                  else
+                    echo "✅ Quality check passed."
+                  fi
+                done
+              fi
+
               break
             else
-              echo "Method $METHOD failed, waiting before next attempt..."
-              sleep $((RANDOM % 10 + 5))
+              echo "Method $METHOD failed, waiting 3 seconds before next attempt..."
+              sleep 3
             fi
           done
 
@@ -271,7 +319,6 @@ jobs:
             exit 1
           fi
 
-          # FIX: Remove any leftover .part files from failed attempts
           find tmp_downloads -name "*.part" -delete
 
           echo "Download complete!"
@@ -291,9 +338,7 @@ jobs:
           get_unique_folder() {
             local BASE_PATH="$1"
             local NAME="$2"
-            local CHECK_BACKUP="$3"
 
-            # Check both in videos and backup dir
             if [ ! -d "$BASE_PATH/$NAME" ] && [ ! -d "$BACKUP_DIR/$NAME" ]; then
               echo "$NAME"
               return
@@ -305,7 +350,6 @@ jobs:
             echo "${NAME}_${RANDOM_SUFFIX}"
           }
 
-          # Create file to store video info
           > /tmp/video_info.txt
 
           FILE_INDEX=0
@@ -317,19 +361,16 @@ jobs:
             EXT="${BASENAME##*.}"
             FILE_INDEX=$((FILE_INDEX + 1))
 
-            # FIX: sanitize name - replace spaces with dashes
             FILENAME_NO_EXT=$(sanitize_name "$FILENAME_NO_EXT")
 
             echo "Processing: $BASENAME ($(( SIZE / 1024 / 1024 ))MB)"
             echo "Sanitized name: $FILENAME_NO_EXT"
 
-            FINAL_FOLDER_NAME=$(get_unique_folder "videos" "$FILENAME_NO_EXT" "true")
+            FINAL_FOLDER_NAME=$(get_unique_folder "videos" "$FILENAME_NO_EXT")
 
-            # Create folder in BACKUP location (safe from git operations)
             mkdir -p "$BACKUP_DIR/${FINAL_FOLDER_NAME}"
             echo "Created backup folder: $BACKUP_DIR/${FINAL_FOLDER_NAME}"
 
-            # Save info for master README update
             echo "${FILENAME_NO_EXT}|${FINAL_FOLDER_NAME}" >> /tmp/video_info.txt
 
             TEMP_NAME="video_${FILE_INDEX}"
@@ -338,27 +379,25 @@ jobs:
             if [ "$SIZE" -gt "$SPLIT_BYTES" ]; then
               echo "Splitting $BASENAME into ${SPLIT_MB}MB parts..."
 
-              cp "$FILE" "tmp_downloads/${TEMP_NAME}.${EXT}"
+              ARCHIVE_BASE="$BACKUP_DIR/${FINAL_FOLDER_NAME}/${FINAL_FOLDER_NAME}"
 
-              cd tmp_downloads
               if [ -n "$ZIP_PASSWORD" ]; then
-                zip -0 -s "${SPLIT_MB}m" -P "$ZIP_PASSWORD" "${TEMP_NAME}.zip" "${TEMP_NAME}.${EXT}"
+                7z a \
+                  -v${SPLIT_MB}m \
+                  -p"${ZIP_PASSWORD}" \
+                  -mhe=on \
+                  -mx=0 \
+                  "${ARCHIVE_BASE}.7z" \
+                  "$FILE"
               else
-                zip -0 -s "${SPLIT_MB}m" "${TEMP_NAME}.zip" "${TEMP_NAME}.${EXT}"
+                7z a \
+                  -v${SPLIT_MB}m \
+                  -mx=0 \
+                  "${ARCHIVE_BASE}.7z" \
+                  "$FILE"
               fi
 
-              for part in ${TEMP_NAME}.z[0-9]* ${TEMP_NAME}.zip; do
-                if [ -f "$part" ]; then
-                  PART_EXT="${part##*.}"
-                  mv "$part" "$BACKUP_DIR/${FINAL_FOLDER_NAME}/${FINAL_FOLDER_NAME}.${PART_EXT}"
-                  echo "  Created: ${FINAL_FOLDER_NAME}.${PART_EXT}"
-                fi
-              done
-
-              rm -f "${TEMP_NAME}.${EXT}"
-              cd ..
-
-              PART_COUNT=$(ls "$BACKUP_DIR/${FINAL_FOLDER_NAME}/"*.z* 2>/dev/null | wc -l)
+              PART_COUNT=$(ls "$BACKUP_DIR/${FINAL_FOLDER_NAME}/"*.7z* 2>/dev/null | wc -l)
               echo "Created $PART_COUNT parts"
 
               TOTAL_SIZE=0
@@ -372,7 +411,7 @@ jobs:
 
               DOWNLOAD_LINKS_MD=""
               LINK_NUM=0
-              for part_file in "$BACKUP_DIR/${FINAL_FOLDER_NAME}"/*.z*; do
+              for part_file in $(ls "$BACKUP_DIR/${FINAL_FOLDER_NAME}/"*.7z* 2>/dev/null | sort); do
                 if [ -f "$part_file" ]; then
                   PART_BASENAME=$(basename "$part_file")
                   PART_ENCODED=$(urlencode "${PART_BASENAME}")
@@ -394,7 +433,7 @@ jobs:
                 printf '%s\n' "|----------|-------|"
                 printf '%s\n' "| **Video Name** | \`${FILENAME_NO_EXT}\` |"
                 printf '%s\n' "| **Original Link** | [YouTube Video](${URL}) |"
-                printf '%s\n' "| **Total Size** | **${PART_COUNT} zip parts** - **${TOTAL_SIZE_MB} MB** |"
+                printf '%s\n' "| **Total Size** | **${PART_COUNT} parts** - **${TOTAL_SIZE_MB} MB** |"
                 printf '%s\n' "| **Quality** | **${QUALITY}** |"
                 printf '%s\n' "| **Status** | **Complete (100%)** |"
                 if [ -n "$ZIP_PASSWORD" ]; then
@@ -415,9 +454,13 @@ jobs:
                 printf '%s\n' ""
                 printf '%s\n' "## How to Extract"
                 printf '%s\n' ""
-                printf '%s\n' "1. **Download** all \`.zip\` and \`.z01\`, \`.z02\`... files"
-                printf '%s\n' "2. **Extract** using [7-Zip](https://www.7-zip.org/) or [WinRAR](https://www.rarlab.com/)"
-                printf '%s\n' "3. Open the \`.zip\` file - all parts will combine automatically"
+                printf '%s\n' "1. **Download** all parts (e.g. \`.7z.001\`, \`.7z.002\`...)"
+                printf '%s\n' "2. **Install** [7-Zip](https://www.7-zip.org/) (Windows/Linux) or [Keka](https://www.keka.io/) (Mac)"
+                printf '%s\n' "3. **Right-click** the \`.7z.001\` file → Extract Here"
+                printf '%s\n' "4. All parts combine automatically into the original video"
+                if [ -n "$ZIP_PASSWORD" ]; then
+                  printf '%s\n' "5. Enter the password when prompted"
+                fi
                 printf '%s\n' ""
                 printf '%s\n' "---"
                 printf '%s\n' ""
@@ -428,18 +471,17 @@ jobs:
 
             else
               if [ -n "$ZIP_PASSWORD" ]; then
-                echo "$BASENAME - creating password-protected zip"
+                echo "$BASENAME - creating password-protected 7z archive"
 
-                cp "$FILE" "tmp_downloads/${TEMP_NAME}.${EXT}"
-
-                cd tmp_downloads
-                zip -j -P "$ZIP_PASSWORD" "${TEMP_NAME}.zip" "${TEMP_NAME}.${EXT}"
-                mv "${TEMP_NAME}.zip" "$BACKUP_DIR/${FINAL_FOLDER_NAME}/${FINAL_FOLDER_NAME}.zip"
-                rm -f "${TEMP_NAME}.${EXT}"
-                cd ..
+                7z a \
+                  -p"${ZIP_PASSWORD}" \
+                  -mhe=on \
+                  -mx=0 \
+                  "$BACKUP_DIR/${FINAL_FOLDER_NAME}/${FINAL_FOLDER_NAME}.7z" \
+                  "$FILE"
 
                 SIZE_MB=$(echo "scale=2; $SIZE / 1024 / 1024" | bc)
-                FILE_ENCODED=$(urlencode "${FINAL_FOLDER_NAME}.zip")
+                FILE_ENCODED=$(urlencode "${FINAL_FOLDER_NAME}.7z")
                 RAW_LINK="https://github.com/${REPO_OWNER}/${REPO_NAME}/raw/${BRANCH}/videos/${FOLDER_ENCODED}/${FILE_ENCODED}"
 
                 README_FILE="$BACKUP_DIR/${FINAL_FOLDER_NAME}/README.md"
@@ -454,7 +496,7 @@ jobs:
                   printf '%s\n' "|----------|-------|"
                   printf '%s\n' "| **Video Name** | \`${FILENAME_NO_EXT}\` |"
                   printf '%s\n' "| **Original Link** | [YouTube Video](${URL}) |"
-                  printf '%s\n' "| **Total Size** | **1 zip file** - **${SIZE_MB} MB** |"
+                  printf '%s\n' "| **Total Size** | **1 archive** - **${SIZE_MB} MB** |"
                   printf '%s\n' "| **Quality** | **${QUALITY}** |"
                   printf '%s\n' "| **Status** | **Complete (100%)** |"
                   printf '%s\n' "| **Password Protected** | **YES** |"
@@ -465,17 +507,25 @@ jobs:
                   printf '%s\n' ""
                   printf '%s\n' "| # | File | Link |"
                   printf '%s\n' "|---|------|------|"
-                  printf '%s\n' "| 1 | \`${FINAL_FOLDER_NAME}.zip\` | [Download](${RAW_LINK}) |"
+                  printf '%s\n' "| 1 | \`${FINAL_FOLDER_NAME}.7z\` | [Download](${RAW_LINK}) |"
+                  printf '%s\n' ""
+                  printf '%s\n' "---"
+                  printf '%s\n' ""
+                  printf '%s\n' "## How to Extract"
+                  printf '%s\n' ""
+                  printf '%s\n' "1. **Install** [7-Zip](https://www.7-zip.org/) (Windows/Linux) or [Keka](https://www.keka.io/) (Mac)"
+                  printf '%s\n' "2. **Right-click** the \`.7z\` file → Extract Here"
+                  printf '%s\n' "3. Enter the password when prompted"
                   printf '%s\n' ""
                   printf '%s\n' "---"
                   printf '%s\n' ""
                   printf '%s\n' "*This tool created by [avasam.ir](https://avasam.ir)*"
                 } > "$README_FILE"
 
-                echo "Created password-protected zip and README.md"
+                echo "Created password-protected 7z archive and README.md"
 
               else
-                echo "$BASENAME - copying mp4"
+                echo "$BASENAME - copying mp4 directly (no archive needed)"
 
                 cp "$FILE" "$BACKUP_DIR/${FINAL_FOLDER_NAME}/${FINAL_FOLDER_NAME}.${EXT}"
 
@@ -524,7 +574,6 @@ jobs:
 
           rm -rf tmp_downloads
 
-          # Debug: Show backup contents
           echo ""
           echo "===== Backup folder contents ====="
           find "$BACKUP_DIR" -type f | head -50
@@ -547,11 +596,9 @@ jobs:
           echo "This method pushes files ONE AT A TIME to avoid timeout issues"
           echo ""
 
-          # Get backup directory path
           BACKUP_DIR=$(cat /tmp/backup_dir_path.txt)
           echo "Backup directory: $BACKUP_DIR"
 
-          # Check backup has files
           BACKUP_FILE_COUNT=$(find "$BACKUP_DIR" -type f 2>/dev/null | wc -l)
           echo "Total files to push: $BACKUP_FILE_COUNT"
 
@@ -560,18 +607,15 @@ jobs:
             exit 1
           fi
 
-          # Function for URL encoding
           urlencode() {
             python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$1"
           }
 
-          # Function to regenerate master README from all folders
           regenerate_master_readme() {
             MASTER_README="videos/README.md"
 
             echo "Regenerating master README..."
 
-            # Start fresh README
             {
               echo "# DOWNLOADED VIDEOS LIST :"
               echo ""
@@ -579,18 +623,13 @@ jobs:
               echo ""
             } > "$MASTER_README"
 
-            # Video emojis
             VIDEO_EMOJIS=("🎬" "🎥" "📽️" "🎞️" "📺" "🎦" "🎭" "🎪" "🎯" "🎮" "🎵" "🎶" "🎸" "🎹" "🎤")
 
-            # Counter for numbering
             NUM=0
 
-            # Add all existing video folders
             for folder in videos/*/; do
               [ -d "$folder" ] || continue
               FOLDER_NAME=$(basename "$folder")
-
-              # Skip if it's not a video folder (check for README.md inside)
               [ -f "$folder/README.md" ] || continue
 
               NUM=$((NUM + 1))
@@ -604,7 +643,6 @@ jobs:
             echo "Master README regenerated with $NUM videos"
           }
 
-          # Function to push a single file with retries
           push_single_file() {
             local FILE_PATH="$1"
             local MAX_RETRIES=5
@@ -613,10 +651,8 @@ jobs:
             while [ $RETRY -lt $MAX_RETRIES ]; do
               RETRY=$((RETRY + 1))
 
-              # Fetch latest
               git fetch origin "$BRANCH" --quiet 2>/dev/null || true
 
-              # Check if we need to rebase
               LOCAL_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "none")
               REMOTE_HEAD=$(git rev-parse origin/"$BRANCH" 2>/dev/null || echo "none")
 
@@ -624,25 +660,20 @@ jobs:
                 echo "    Syncing with remote..."
                 git reset --hard origin/"$BRANCH" 2>/dev/null || true
 
-                # Re-copy all backup files to ensure they exist
                 mkdir -p videos
                 cp -r "$BACKUP_DIR"/* videos/ 2>/dev/null || true
               fi
 
-              # Stage the specific file
               git add "$FILE_PATH" 2>/dev/null || true
 
-              # Check if there's anything to commit
               if git diff --cached --quiet 2>/dev/null; then
                 echo "    File already exists or no changes"
                 return 0
               fi
 
-              # Commit
               FILENAME=$(basename "$FILE_PATH")
               git commit -m "[AVASAM] Add: $FILENAME [skip ci]" --quiet 2>/dev/null || true
 
-              # Push with timeout
               echo "    Push attempt $RETRY/$MAX_RETRIES..."
               if timeout 120 git push origin HEAD:"$BRANCH" 2>&1; then
                 echo "    SUCCESS!"
@@ -657,9 +688,8 @@ jobs:
             return 1
           }
 
-          # Function to push files in small batches
           push_batch() {
-            local BATCH_SIZE=3  # Push 3 files at a time (about 135MB with 45MB splits)
+            local BATCH_SIZE=5
             local FILES=("$@")
             local BATCH_COUNT=0
             local BATCH_FILES=()
@@ -675,24 +705,19 @@ jobs:
                 echo ""
                 echo ">>> Pushing batch ($TOTAL_PUSHED/$TOTAL_FILES files)..."
 
-                # Fetch and reset to latest
                 git fetch origin "$BRANCH" --quiet 2>/dev/null || true
                 git reset --hard origin/"$BRANCH" 2>/dev/null || true
 
-                # Re-copy all backup files
                 mkdir -p videos
                 cp -r "$BACKUP_DIR"/* videos/ 2>/dev/null || true
 
-                # Add batch files
                 for BF in "${BATCH_FILES[@]}"; do
                   git add "$BF" 2>/dev/null || true
                 done
 
-                # Commit batch
                 if ! git diff --cached --quiet 2>/dev/null; then
                   git commit -m "[AVASAM] Add batch of $BATCH_COUNT files [skip ci]" --quiet 2>/dev/null || true
 
-                  # Push with retries
                   local PUSH_RETRY=0
                   local PUSH_SUCCESS=false
                   while [ $PUSH_RETRY -lt 5 ]; do
@@ -731,7 +756,6 @@ jobs:
               fi
             done
 
-            # Push remaining files
             if [ ${#BATCH_FILES[@]} -gt 0 ]; then
               TOTAL_PUSHED=$((TOTAL_PUSHED + ${#BATCH_FILES[@]}))
               echo ""
@@ -774,37 +798,28 @@ jobs:
             fi
           }
 
-          # ============================================
-          # MAIN INCREMENTAL PUSH LOGIC
-          # ============================================
-
           echo ""
           echo "=========================================="
           echo "Starting incremental push process..."
           echo "=========================================="
 
-          # First, sync with remote
           echo "Syncing with remote repository..."
           git fetch origin "$BRANCH"
           git reset --hard origin/"$BRANCH"
 
-          # Create videos directory and copy files
           mkdir -p videos
           cp -r "$BACKUP_DIR"/* videos/
 
-          # Generate list of files to push (sorted by size, smallest first)
           echo "Analyzing files to push..."
           ALL_FILES=()
 
-          # First add README files (small)
           while IFS= read -r -d '' FILE; do
             ALL_FILES+=("$FILE")
           done < <(find videos -name "README.md" -print0 2>/dev/null)
 
-          # Then add zip parts sorted by name (for ordered upload)
           while IFS= read -r -d '' FILE; do
             ALL_FILES+=("$FILE")
-          done < <(find videos -type f \( -name "*.z[0-9]*" -o -name "*.zip" -o -name "*.mp4" -o -name "*.mp3" -o -name "*.m4a" \) -print0 2>/dev/null | sort -z)
+          done < <(find videos -type f \( -name "*.7z" -o -name "*.7z.[0-9]*" -o -name "*.mp4" -o -name "*.mp3" -o -name "*.m4a" \) -print0 2>/dev/null | sort -z)
 
           TOTAL_FILES=${#ALL_FILES[@]}
           echo "Found $TOTAL_FILES files to push"
@@ -815,7 +830,6 @@ jobs:
             exit 0
           fi
 
-          # Calculate total size
           TOTAL_SIZE=0
           for F in "${ALL_FILES[@]}"; do
             if [ -f "$F" ]; then
@@ -827,7 +841,6 @@ jobs:
           echo "Total size: ${TOTAL_SIZE_MB}MB"
           echo ""
 
-          # Decide push strategy based on total size
           if [ $TOTAL_SIZE_MB -lt 100 ]; then
             echo "Small upload - pushing all at once..."
 
@@ -865,10 +878,8 @@ jobs:
             echo "Large upload (${TOTAL_SIZE_MB}MB) - using incremental batch push..."
             echo ""
 
-            # Push files in batches
             push_batch "${ALL_FILES[@]}"
 
-            # Final push for master README
             echo ""
             echo "Pushing master README..."
             git fetch origin "$BRANCH" --quiet 2>/dev/null || true
