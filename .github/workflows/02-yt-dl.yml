@@ -771,6 +771,251 @@ jobs:
           echo "===== Video info file ====="
           cat /tmp/video_info.txt
 
+      - name: Download Subtitles
+        run: |
+          # ──────────────────────────────────────────────────────────────────────
+          # SUBTITLE DOWNLOADER
+          # • Downloads original subtitles (all languages) if they exist
+          # • Downloads Persian (fa) subtitles — or auto-translates if missing
+          # • Saves everything to: videos/<video_folder>/subtitle/
+          # ──────────────────────────────────────────────────────────────────────
+          BACKUP_DIR=$(cat /tmp/backup_dir_path.txt)
+          REPO_OWNER=$(cat /tmp/yt_repo_owner.txt)
+          REPO_NAME=$(cat /tmp/yt_repo_name.txt)
+          BRANCH=$(cat /tmp/yt_branch.txt)
+          mapfile -t URL_LIST < /tmp/yt_urls.txt
+
+          # Subtitle download mirrors the exact same bot-bypass strategy as the video
+          # downloader: same 8 methods, same proxy, same deno+EJS JS solver, same
+          # user-agents. Only the yt-dlp flags differ (subtitle flags vs format flags).
+
+          sub_download() {
+            local MODE=$1      # "all", "fa-native", "fa-auto"
+            local OUT="$2"
+            local SURL="$3"
+            local SUB_DIR
+            SUB_DIR=$(dirname "$OUT")
+
+            # Check helper: count subtitle files written so far
+            sub_count() { find "$SUB_DIR" -type f \( -name "*.vtt" -o -name "*.srt" \) 2>/dev/null | wc -l; }
+            fa_count()  { find "$SUB_DIR" -type f \( -name "*.fa.vtt" -o -name "*.fa.srt" \) 2>/dev/null | wc -l; }
+
+            # Build the sub-mode flags
+            sub_flags() {
+              case $MODE in
+                all)      echo "--write-sub --sub-langs fa,en" ;;
+                fa-native) echo "--write-sub --sub-langs fa" ;;
+                fa-auto)  echo "--write-auto-sub --sub-langs fa" ;;
+              esac
+            }
+            SFLAGS=$(sub_flags)
+            COMMON_SUB="--sub-format vtt/srt/best --convert-subs vtt --skip-download --no-playlist --no-check-certificates --output ${OUT}"
+
+            for METHOD in 1 2 3 4 5 6 7 8; do
+              echo "  [subtitle] method $METHOD ..."
+              case $METHOD in
+                1)
+                  yt-dlp \
+                    --proxy "socks5://127.0.0.1:1080" \
+                    --extractor-args "youtube:player_client=web" \
+                    --js-runtimes deno \
+                    --remote-components ejs:github \
+                    --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
+                    --add-header "Accept-Language:en-US,en;q=0.9" \
+                    $SFLAGS $COMMON_SUB "$SURL" 2>&1 || true
+                  ;;
+                2)
+                  yt-dlp \
+                    --proxy "socks5://127.0.0.1:1080" \
+                    --extractor-args "youtube:player_client=web" \
+                    --js-runtimes deno \
+                    --remote-components ejs:npm \
+                    --user-agent "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" \
+                    --add-header "Accept-Language:en-US,en;q=0.9" \
+                    $SFLAGS $COMMON_SUB "$SURL" 2>&1 || true
+                  ;;
+                3)
+                  yt-dlp \
+                    --proxy "socks5://127.0.0.1:1080" \
+                    --extractor-args "youtube:player_client=web,mweb,android_vr" \
+                    --js-runtimes deno \
+                    --remote-components ejs:github \
+                    $SFLAGS $COMMON_SUB "$SURL" 2>&1 || true
+                  ;;
+                4)
+                  yt-dlp \
+                    --proxy "socks5://127.0.0.1:1080" \
+                    --extractor-args "youtube:player_client=mweb" \
+                    $SFLAGS $COMMON_SUB "$SURL" 2>&1 || true
+                  ;;
+                5)
+                  yt-dlp \
+                    --proxy "socks5://127.0.0.1:1080" \
+                    --extractor-args "youtube:player_client=android_vr" \
+                    $SFLAGS $COMMON_SUB "$SURL" 2>&1 || true
+                  ;;
+                6)
+                  yt-dlp \
+                    --extractor-args "youtube:player_client=web" \
+                    --js-runtimes deno \
+                    --remote-components ejs:github \
+                    $SFLAGS $COMMON_SUB "$SURL" 2>&1 || true
+                  ;;
+                7)
+                  yt-dlp \
+                    --extractor-args "youtube:player_client=mweb" \
+                    $SFLAGS $COMMON_SUB "$SURL" 2>&1 || true
+                  ;;
+                8)
+                  yt-dlp \
+                    --proxy "socks5://127.0.0.1:1080" \
+                    --extractor-args "youtube:player_client=android" \
+                    --user-agent "Mozilla/5.0 (Linux; Android 12; SM-S906N Build/QP1A.190711.020) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36" \
+                    $SFLAGS $COMMON_SUB "$SURL" 2>&1 || true
+                  ;;
+              esac
+
+              # Stop as soon as we have subtitle files
+              if [ "$MODE" = "fa-native" ] || [ "$MODE" = "fa-auto" ]; then
+                [ "$(fa_count)" -gt 0 ] && { echo "  [subtitle] ✅ success with method $METHOD"; return 0; }
+              else
+                [ "$(sub_count)" -gt 0 ] && { echo "  [subtitle] ✅ success with method $METHOD"; return 0; }
+              fi
+
+              sleep 1
+            done
+
+            echo "  [subtitle] ⚠️  all 8 methods failed for mode: $MODE"
+            return 1
+          }
+
+          URL_INDEX=0
+          while IFS='|' read -r ORIGINAL_NAME FOLDER_NAME; do
+            URL_INDEX=$((URL_INDEX + 1))
+            URL="${URL_LIST[$((URL_INDEX - 1))]}"
+
+            [ -z "$FOLDER_NAME" ] && continue
+
+            SUBTITLE_DIR="$BACKUP_DIR/${FOLDER_NAME}/subtitle"
+            mkdir -p "$SUBTITLE_DIR"
+
+            # Output template: no %(ext)s — yt-dlp appends .LANG.vtt automatically.
+            # Using %(ext)s with --skip-download resolves to the video container (mp4)
+            # and produces ugly Title.mp4.fa.vtt filenames.
+            OUT_TMPL="${SUBTITLE_DIR}/%(title)s"
+
+            echo ""
+            echo "============================================================"
+            echo "Downloading subtitles for: $FOLDER_NAME"
+            echo "URL: $URL"
+            echo "============================================================"
+
+            # ── Step 1: All original subtitles ────────────────────────────────
+            echo "→ Fetching all original subtitles (mweb/android_vr/web clients)..."
+            sub_download "all" "$OUT_TMPL" "$URL"
+
+            # ── Step 2: Persian — native first, auto-translate fallback ───────
+            echo ""
+            echo "→ Checking for Persian (fa) subtitle..."
+
+            FA_COUNT=$(find "$SUBTITLE_DIR" -type f \( -name "*.fa.vtt" -o -name "*.fa.srt" \) 2>/dev/null | wc -l)
+
+            if [ "$FA_COUNT" -gt 0 ]; then
+              echo "✅ Persian subtitle already present from all-subs download."
+            else
+              echo "→ Persian not in all-subs — trying native fa explicitly..."
+              sub_download "fa-native" "$OUT_TMPL" "$URL"
+
+              FA_COUNT=$(find "$SUBTITLE_DIR" -type f \( -name "*.fa.vtt" -o -name "*.fa.srt" \) 2>/dev/null | wc -l)
+
+              if [ "$FA_COUNT" -eq 0 ]; then
+                echo "→ No native Persian — trying auto-translated Persian..."
+                sub_download "fa-auto" "$OUT_TMPL" "$URL"
+
+                FA_COUNT=$(find "$SUBTITLE_DIR" -type f \( -name "*.fa.vtt" -o -name "*.fa.srt" \) 2>/dev/null | wc -l)
+                if [ "$FA_COUNT" -gt 0 ]; then
+                  echo "✅ Auto-translated Persian subtitle downloaded."
+                else
+                  echo "⚠️  Persian subtitle unavailable for this video."
+                fi
+              else
+                echo "✅ Native Persian subtitle downloaded."
+              fi
+            fi
+
+            # ── Step 3: Zip all subtitles → subtitle.zip, patch README ──────────
+            SUB_COUNT=$(find "$SUBTITLE_DIR" -type f 2>/dev/null | wc -l)
+
+            if [ "$SUB_COUNT" -eq 0 ]; then
+              echo "  (no subtitles available for this video)"
+              rmdir "$SUBTITLE_DIR" 2>/dev/null || true
+            else
+              echo ""
+              echo "→ Subtitle files downloaded ($SUB_COUNT file(s)):"
+              find "$SUBTITLE_DIR" -type f | while read -r SUB_FILE; do
+                echo "  • $(basename "$SUB_FILE")"
+              done
+
+              # Create subtitle.zip inside the video folder (not inside subtitle/)
+              ZIP_PATH="$BACKUP_DIR/${FOLDER_NAME}/subtitle.zip"
+              echo ""
+              echo "→ Zipping subtitles → subtitle.zip ..."
+              (cd "$SUBTITLE_DIR" && zip -j "$ZIP_PATH" ./* 2>&1)
+              rm -rf "$SUBTITLE_DIR"
+
+              ZIP_SIZE_MB=$(echo "scale=2; $(stat -c%s "$ZIP_PATH") / 1024 / 1024" | bc)
+              echo "✅ subtitle.zip created (${ZIP_SIZE_MB} MB)"
+
+              # Build the raw download link for subtitle.zip
+              FOLDER_ENCODED=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$FOLDER_NAME")
+              SUB_ZIP_ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote('subtitle.zip', safe=''))")
+              SUB_RAW_LINK="https://github.com/${REPO_OWNER}/${REPO_NAME}/raw/${BRANCH}/videos/${FOLDER_ENCODED}/${SUB_ZIP_ENCODED}"
+
+              # Patch the existing README.md — append subtitle section before the last footer
+              README_FILE="$BACKUP_DIR/${FOLDER_NAME}/README.md"
+              if [ -f "$README_FILE" ]; then
+                # Write a temp file with the subtitle section
+                SUB_SECTION_FILE=$(mktemp)
+                {
+                  printf '%s\n' ""
+                  printf '%s\n' "---"
+                  printf '%s\n' ""
+                  printf '%s\n' "## 🔤 Subtitles"
+                  printf '%s\n' ""
+                  printf '%s\n' "| # | File | Link |"
+                  printf '%s\n' "|---|------|------|"
+                  printf '%s\n' "| 1 | \`subtitle.zip\` | [Download](${SUB_RAW_LINK}) |"
+                  printf '%s\n' ""
+                  printf '%s\n' "> Contains all available subtitle languages. Extract to get \`.vtt\` files."
+                  printf '%s\n' ""
+                } > "$SUB_SECTION_FILE"
+
+                # Find line number of last "---" in the README (the footer separator)
+                LAST_SEP=$(grep -n "^---$" "$README_FILE" | tail -1 | cut -d: -f1)
+                if [ -n "$LAST_SEP" ]; then
+                  # Insert subtitle section before that last "---"
+                  INSERT_AT=$((LAST_SEP - 1))
+                  head -n "$INSERT_AT" "$README_FILE" > "${README_FILE}.tmp"
+                  cat "$SUB_SECTION_FILE" >> "${README_FILE}.tmp"
+                  tail -n "+$((INSERT_AT + 1))" "$README_FILE" >> "${README_FILE}.tmp"
+                  mv "${README_FILE}.tmp" "$README_FILE"
+                  echo "README patched with subtitle download link."
+                else
+                  # No separator found — just append
+                  cat "$SUB_SECTION_FILE" >> "$README_FILE"
+                  echo "README appended with subtitle download link."
+                fi
+                rm -f "$SUB_SECTION_FILE"
+              fi
+            fi
+
+          done < /tmp/video_info.txt
+
+          echo ""
+          echo "Subtitle download phase complete."
+          echo "=== Final backup dir structure ==="
+          find "$BACKUP_DIR" -type f | sort
+
       - name: Stop WARP Container
         if: always()
         run: |
@@ -1047,7 +1292,7 @@ jobs:
 
           while IFS= read -r -d '' FILE; do
             ALL_FILES+=("$FILE")
-          done < <(find videos -type f \( -name "*.zip" -o -name "*.z[0-9]*" -o -name "*.mp4" -o -name "*.mp3" -o -name "*.m4a" -o -name "*.webm" -o -name "*.opus" -o -name "*.ogg" -o -name "*.aac" -o -name "*.flac" \) -print0 2>/dev/null | sort -z)
+          done < <(find videos -type f \( -name "*.zip" -o -name "*.z[0-9]*" -o -name "*.mp4" -o -name "*.mp3" -o -name "*.m4a" -o -name "*.webm" -o -name "*.opus" -o -name "*.ogg" -o -name "*.aac" -o -name "*.flac" -o -name "*.srt" -o -name "*.vtt" -o -name "*.ass" -o -name "*.ssa" -o -name "*.ttml" \) -print0 2>/dev/null | sort -z)
 
           TOTAL_FILES=${#ALL_FILES[@]}
           echo "Found $TOTAL_FILES files to push"
