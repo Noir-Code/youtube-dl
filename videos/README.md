@@ -1,1 +1,25 @@
-this folder is empty. start using with actions
+# DOWNLOADED VIDEOS LIST :
+
+----
+
+- 1 - 🎬 [Absolute-Cinema-｜-Sukuna-Edit-🗿🐐-｜-jujutsu-kaisen-｜-#sukuna-#gojo-#jjk_nova_28002](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Absolute-Cinema-%EF%BD%9C-Sukuna-Edit-%F0%9F%97%BF%F0%9F%90%90-%EF%BD%9C-jujutsu-kaisen-%EF%BD%9C-%23sukuna-%23gojo-%23jjk_nova_28002)
+- 2 - 📺 [BLEACH-🌀-｜-ALL-ACCORDING-TO-PLAN-(Aizen-Dark-Phonk)_ocean_8715](https://github.com/Noir-Code/youtube-dl/tree/main/videos/BLEACH-%F0%9F%8C%80-%EF%BD%9C-ALL-ACCORDING-TO-PLAN-%28Aizen-Dark-Phonk%29_ocean_8715)
+- 3 - 🎦 [Crimson-Specter-[VOL-1]-(SUPER-SLOWED)-FUNK!_beta_23547](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Crimson-Specter-%5BVOL-1%5D-%28SUPER-SLOWED%29-FUNK%21_beta_23547)
+- 4 - 📽️ [Fire-Keeper-edit🔥｜-#darksouls-#darksoulsedit-#firekeeper_kappa_2087](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Fire-Keeper-edit%F0%9F%94%A5%EF%BD%9C-%23darksouls-%23darksoulsedit-%23firekeeper_kappa_2087)
+- 5 - ▶️ [I'm-Banished-from-Death-Talion-Shadow-Of-War-[Edit]-KREZUS,-Surreal_dvd-Skins-(Slowed-+-Reverb)_sky_20880](https://github.com/Noir-Code/youtube-dl/tree/main/videos/I%27m-Banished-from-Death-Talion-Shadow-Of-War-%5BEdit%5D-KREZUS%2C-Surreal_dvd-Skins-%28Slowed-%2B-Reverb%29_sky_20880)
+- 6 - 🎦 [Invincible-War-AMV-Edit｜Flare-Hensonn-(Slowed)_omega_27894](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Invincible-War-AMV-Edit%EF%BD%9CFlare-Hensonn-%28Slowed%29_omega_27894)
+- 7 - 📺 [Lord-of-the-Mysteries._alpha_12720](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Lord-of-the-Mysteries._alpha_12720)
+- 8 - 📽️ [Lords-of-the-Fallen-II-is-savage🤯🗿_lambda_4531](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Lords-of-the-Fallen-II-is-savage%F0%9F%A4%AF%F0%9F%97%BF_lambda_4531)
+- 9 - 🎦 [Love-Has-Blinded-You._cloud_22826](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Love-Has-Blinded-You._cloud_22826)
+- 10 - 🎞️ [Nothing-is-impossible-｜-Tai-lung-edit-｜-STRUCT-(Slowed)-UdieNnx-｜_mountain_2104](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Nothing-is-impossible-%EF%BD%9C-Tai-lung-edit-%EF%BD%9C-STRUCT-%28Slowed%29-UdieNnx-%EF%BD%9C_mountain_2104)
+- 11 - 📺 [Ranking-Dialogues-in-God-of-War-Ragnarök!-😂💀🗿-#shorts-#godofwar_omega_9590](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Ranking-Dialogues-in-God-of-War-Ragnar%C3%B6k%21-%F0%9F%98%82%F0%9F%92%80%F0%9F%97%BF-%23shorts-%23godofwar_omega_9590)
+- 12 - 🎦 [THE-SUN!？-#hollowknight-#hollowknightsilksong-#edit-#fyp-#anime-#animeedit-#gojo-#dbz-#jjk#goku#aura_sky_31456](https://github.com/Noir-Code/youtube-dl/tree/main/videos/THE-SUN%21%EF%BC%9F-%23hollowknight-%23hollowknightsilksong-%23edit-%23fyp-%23anime-%23animeedit-%23gojo-%23dbz-%23jjk%23goku%23aura_sky_31456)
+- 13 - 📽️ [The-Chosen-One_river_1005](https://github.com/Noir-Code/youtube-dl/tree/main/videos/The-Chosen-One_river_1005)
+- 14 - 🎥 [The-Truth-Behind-The-VIRAL-Drowning-Rat…🤯🧠_zeta_24102](https://github.com/Noir-Code/youtube-dl/tree/main/videos/The-Truth-Behind-The-VIRAL-Drowning-Rat%E2%80%A6%F0%9F%A4%AF%F0%9F%A7%A0_zeta_24102)
+- 15 - 📺 [Top-11-Domains-in-JJK-💀🔥-｜-Jujutsu-Kaisen-Season-3-｜-#anime-#jujutsukaisen-#jjk-#gojo-#sukuna_beta_12294](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Top-11-Domains-in-JJK-%F0%9F%92%80%F0%9F%94%A5-%EF%BD%9C-Jujutsu-Kaisen-Season-3-%EF%BD%9C-%23anime-%23jujutsukaisen-%23jjk-%23gojo-%23sukuna_beta_12294)
+- 16 - 🎞️ [Witch-King-＂-Doom-of-Gondor-＂-(＂LOTR-&-Hobbit＂)-Edit-｜-slxughter-Fragment-(4K)_theta_20245](https://github.com/Noir-Code/youtube-dl/tree/main/videos/Witch-King-%EF%BC%82-Doom-of-Gondor-%EF%BC%82-%28%EF%BC%82LOTR-%26-Hobbit%EF%BC%82%29-Edit-%EF%BD%9C-slxughter-Fragment-%284K%29_theta_20245)
+- 17 - 🎬 [[4K]-ELDEN-RING-Shadow-of-the-Erdtree-Edit-FE!N_zeta_3686](https://github.com/Noir-Code/youtube-dl/tree/main/videos/%5B4K%5D-ELDEN-RING-Shadow-of-the-Erdtree-Edit-FE%21N_zeta_3686)
+- 18 - 🎬 [＂-KING-OF-GONDOR-🔥＂-Lord-Of-The-Rings-Aragon-Edit_beta_4235](https://github.com/Noir-Code/youtube-dl/tree/main/videos/%EF%BC%82-KING-OF-GONDOR-%F0%9F%94%A5%EF%BC%82-Lord-Of-The-Rings-Aragon-Edit_beta_4235)
+- 19 - 🎬 [＂Lord-Of-The-Rings＂-｜-Sauron-Edit-[4K]-⧸-Death-Rattle(slowed)_ocean_28889](https://github.com/Noir-Code/youtube-dl/tree/main/videos/%EF%BC%82Lord-Of-The-Rings%EF%BC%82-%EF%BD%9C-Sauron-Edit-%5B4K%5D-%E2%A7%B8-Death-Rattle%28slowed%29_ocean_28889)
+- 20 - 🎦 [＂Which-One-Is-the-True-Masterpiece？”🔥✨️💯_sigma_19873](https://github.com/Noir-Code/youtube-dl/tree/main/videos/%EF%BC%82Which-One-Is-the-True-Masterpiece%EF%BC%9F%E2%80%9D%F0%9F%94%A5%E2%9C%A8%EF%B8%8F%F0%9F%92%AF_sigma_19873)
+- 21 - 🎞️ [🔥Can’t-Defeat-You...-But-He-Can＂-⚡-｜-RAGNAROK-EDIT-｜-#edit-#marvel-#thor-#mcu-#short_river_3155](https://github.com/Noir-Code/youtube-dl/tree/main/videos/%F0%9F%94%A5Can%E2%80%99t-Defeat-You...-But-He-Can%EF%BC%82-%E2%9A%A1-%EF%BD%9C-RAGNAROK-EDIT-%EF%BD%9C-%23edit-%23marvel-%23thor-%23mcu-%23short_river_3155)
