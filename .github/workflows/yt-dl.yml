@@ -39,13 +39,6 @@ jobs:
       contents: write
 
     steps:
-      - name: ذخیره سازی وضعیت فعال بودن
-        if: success()
-        uses: actions/cache/save@v4
-        with:
-          path: .avasam_activated
-          key: avasam-activated-${{ github.repository }}-${{ github.actor }}
-
       - name: بررسی اولیه
         uses: actions/checkout@v4
         with:
